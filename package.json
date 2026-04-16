@@ -1,0 +1,9 @@
+{
+  "name": "zetheta-project",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ]
+}
