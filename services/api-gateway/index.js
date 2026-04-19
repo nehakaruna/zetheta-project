@@ -1,6 +1,8 @@
 const express = require("express");
 const { Pool } = require("pg");
 const Redis = require("ioredis");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
@@ -17,12 +19,14 @@ const pool = new Pool({
 // Redis
 const redis = new Redis();
 
+const JWT_SECRET = "supersecret";
+
 // Root
 app.get("/", (req, res) => {
   res.send("API Running");
 });
 
-// Init DB
+// Init DB + INDEX
 app.get("/init-db", async (req, res) => {
   try {
     await pool.query(`
@@ -39,102 +43,91 @@ app.get("/init-db", async (req, res) => {
         score INT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE INDEX IF NOT EXISTS idx_candidate_id ON scores(candidate_id);
     `);
 
-    res.send("Tables created");
+    res.send("Tables + index created");
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Error creating tables");
+    res.status(500).send("Error");
   }
 });
 
-// Add test candidate
+// Token
+app.post("/generate-token", async (req, res) => {
+  const { candidateId } = req.body;
+
+  const nonce = crypto.randomBytes(16).toString("hex");
+
+  await redis.setex(`nonce:${nonce}`, 120, "valid");
+
+  const token = jwt.sign(
+    { candidateId, nonce },
+    JWT_SECRET,
+    { expiresIn: "120s" }
+  );
+
+  res.json({ token });
+});
+
+// Add candidate
 app.get("/add-test", async (req, res) => {
+  const result = await pool.query(
+    "INSERT INTO candidates (name) VALUES ($1) RETURNING *",
+    ["Neha"]
+  );
+
+  await redis.publish(
+    "candidate_submitted",
+    JSON.stringify(result.rows[0])
+  );
+
+  res.json(result.rows[0]);
+});
+
+// Secure submit
+app.post("/submit-assessment", async (req, res) => {
   try {
+    const token = req.headers["authorization"];
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const exists = await redis.get(`nonce:${decoded.nonce}`);
+
+    if (!exists) return res.send("Token already used or expired");
+
+    await redis.del(`nonce:${decoded.nonce}`);
+
     const result = await pool.query(
-      "INSERT INTO candidates (name) VALUES ($1) RETURNING *",
-      ["Neha"]
+      "INSERT INTO candidates (name, status) VALUES ($1, $2) RETURNING *",
+      [`Candidate-${decoded.candidateId}`, "Attempted"]
     );
 
-    // 🔥 Send event to worker
     await redis.publish(
       "candidate_submitted",
       JSON.stringify(result.rows[0])
     );
 
     res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error adding candidate");
+
+  } catch {
+    res.send("Invalid or expired token");
   }
 });
 
-// 🔥 NEW: Submit Assessment (REAL FLOW)
-app.post("/submit-assessment", async (req, res) => {
-  try {
-    const { name } = req.body;
-
-    const result = await pool.query(
-      "INSERT INTO candidates (name, status) VALUES ($1, $2) RETURNING *",
-      [name, "Attempted"]
-    );
-
-    // 🔥 Send event to worker
-    await redis.publish(
-      "candidate_submitted",
-      JSON.stringify(result.rows[0])
-    );
-
-    res.json({
-      message: "Assessment submitted",
-      candidate: result.rows[0],
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error submitting assessment");
-  }
-});
-
-// Get candidates
-app.get("/candidates", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM candidates");
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error fetching candidates");
-  }
-});
-
-// Get scores
-app.get("/scores", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM scores");
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error fetching scores");
-  }
-});
-
-// Combined results
+// Results
 app.get("/results", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT c.id, c.name, c.status, s.score
-      FROM candidates c
-      LEFT JOIN scores s ON c.id = s.candidate_id
-      ORDER BY c.id ASC
-    `);
+  const result = await pool.query(`
+    SELECT c.id, c.name, c.status, s.score
+    FROM candidates c
+    LEFT JOIN scores s ON c.id = s.candidate_id
+    ORDER BY c.id ASC
+  `);
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error fetching results");
-  }
+  res.json(result.rows);
 });
 
-// Start server
+// Start
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });

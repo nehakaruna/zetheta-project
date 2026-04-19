@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Candidate Dashboard</title>
+</head>
+<body>
+
+<h2>Add Candidate</h2>
+<button onclick="addCandidate()">Add Candidate</button>
+
+<h2>Results</h2>
+<button onclick="loadResults()">Refresh Results</button>
+
+<pre id="output"></pre>
+
+<script>
+async function addCandidate() {
+  await fetch("http://localhost:3000/add-test");
+  loadResults();
+}
+
+async function loadResults() {
+  const res = await fetch("http://localhost:3000/results");
+  const data = await res.json();
+  document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+}
+</script>
+
+</body>
+</html>

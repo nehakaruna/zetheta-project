@@ -2,53 +2,13 @@
 
 
 
-\##  Overview
+\## 🚀 Overview
 
-This project is a simplified distributed system for evaluating candidates asynchronously. It demonstrates a production-style architecture with multiple services, database integration, and background processing.
-
-
-
-\---
+This project implements a distributed, event-driven system for asynchronous candidate evaluation.
 
 
 
-\##  Architecture
-
-
-
-The system consists of:
-
-
-
-\- \*\*API Gateway (Node.js + Express)\*\*
-
-&#x20; - Handles user requests
-
-&#x20; - Inserts candidate data
-
-&#x20; - Exposes endpoints for results
-
-
-
-\- \*\*PostgreSQL (Database)\*\*
-
-&#x20; - Stores candidates and scores
-
-
-
-\- \*\*Evaluation Worker (Node.js)\*\*
-
-&#x20; - Runs independently
-
-&#x20; - Processes candidates asynchronously
-
-&#x20; - Generates scores
-
-
-
-\- \*\*Docker\*\*
-
-&#x20; - Runs PostgreSQL and Redis containers
+The system separates request handling from background processing using Redis, ensuring scalability, fault tolerance, and responsiveness.
 
 
 
@@ -56,41 +16,25 @@ The system consists of:
 
 
 
-\##  System Flow
+\## 🧠 Architecture
 
 
 
-1\. Candidate is added via API (`/add-test`)
-
-2\. Candidate is stored in PostgreSQL
-
-3\. Worker continuously checks for unprocessed candidates
-
-4\. Worker assigns a score
-
-5\. Score is stored in the database
-
-6\. API exposes results via `/results`
+Client → API Gateway → PostgreSQL → Redis → Worker → PostgreSQL → API → Dashboard
 
 
 
-\---
+\### Components:
 
+\- API Gateway (Node.js + Express)
 
+\- PostgreSQL (data storage)
 
-\##  Tech Stack
+\- Redis (event broker)
 
+\- Evaluation Worker (async processing)
 
-
-\- Node.js
-
-\- Express.js
-
-\- PostgreSQL
-
-\- Docker
-
-\- JavaScript
+\- Simple Frontend Dashboard
 
 
 
@@ -98,31 +42,23 @@ The system consists of:
 
 
 
-\##  Project Structure
-
-zetheta-project/
-
-│
-
-├── services/
-
-│ ├── api-gateway/
-
-│ │ └── index.js
-
-│ │
-
-│ └── evaluation-worker/
-
-│ └── worker.js
-
-│
-
-├── docker-compose.yml
-
-└── README.md
+\## 🔄 System Flow
 
 
+
+1\. Candidate created via API
+
+2\. API stores candidate in PostgreSQL
+
+3\. API publishes event to Redis
+
+4\. Worker consumes event
+
+5\. Worker computes score
+
+6\. Worker updates database + status
+
+7\. Results available via `/results`
 
 
 
@@ -130,15 +66,107 @@ zetheta-project/
 
 
 
-\##  Setup Instructions
+\## 🔐 Security (HIGH PRIORITY)
 
 
 
-\### 1. Start Database (Docker)
+\- JWT-based authentication
+
+\- Token expiry: 120 seconds
+
+\- Redis nonce for single-use tokens
+
+\- Replay attack prevention
+
+\- Server-side token generation
+
+
+
+\---
+
+
+
+\## ⚙️ Distributed System Features
+
+
+
+\### ✅ Asynchronous Processing
+
+\- API does not wait for scoring
+
+\- Worker processes independently
+
+
+
+\### ✅ Idempotency
+
+\- Duplicate events are ignored
+
+\- Worker checks existing score before processing
+
+
+
+\### ✅ Retry Logic
+
+\- Worker retries failed jobs up to 3 times
+
+
+
+\### ✅ Fault Tolerance
+
+\- Redis failures do not corrupt data
+
+\- System continues gracefully
+
+
+
+\---
+
+
+
+\## 📊 Performance Optimization
+
+
+
+\- Index on `scores(candidate\_id)`
+
+\- Avoids full table scans
+
+\- Efficient DB lookups
+
+
+
+\---
+
+
+
+\## 📈 Observability
+
+
+
+\- Structured JSON logs
+
+\- Tracks:
+
+&#x20; - processing events
+
+&#x20; - failures
+
+&#x20; - retries
+
+
+
+\---
+
+
+
+\## 🐳 Setup Instructions
+
+
+
+\### 1. Start services
 
 ```bash
 
 docker compose up -d
-
-
 
