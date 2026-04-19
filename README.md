@@ -166,7 +166,23 @@ Client → API Gateway → PostgreSQL → Redis → Worker → PostgreSQL → AP
 
 \### 1. Start services
 
-```bash
+### 2. Start API
+cd services/api-gateway
+node index.js
 
+### 3. Start Worker
+cd services/evaluation-worker
+node worker.js
+
+### 4. Initialize Database
+Open in browser:
+http://localhost:3000/init-db
+
+### 5. Test System
+http://localhost:3000/add-test
+http://localhost:3000/results
+
+
+```bash
 docker compose up -d
 
